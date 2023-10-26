@@ -2,16 +2,13 @@
 
 #include <QtWidgets/QMainWindow>
 #include "ui_qtsmth.h"
-#include <opencv2/opencv.hpp>
-#include <QImage>
 #include <QPixmap>
 #include <QLabel>
 #include <QVBoxLayout>
-#include <QScrollArea>
-#include <QSpinBox>
-#include <QPushButton>
-#include <QLineEdit>
+#include <Qmessagebox>
 #include <QProgressDialog>
+#include <QImage>
+#include<QFileDialog>
 
 
 class QtSmth : public QMainWindow
@@ -26,24 +23,17 @@ private slots:
     void on_actionOpen_triggered();
     void on_actionSave_triggered();
     void on_actionExit_triggered();   
+    void applyFilter();
 
 private:
     Ui::QtSmthClass ui;
    
-    void displayImage(const cv::Mat& image, QLabel* label);
-    void applyFilter();
+    void displayImage(const QImage image, QLabel* label);
     void showAbout();
-
     std::vector<double> calculateGaussianKernel(int& sigma, int& kernelSize, int& kernelHalf);
-    cv::Mat applyGaussianBlur(int& sigma);
-    
-    QLabel* originalImageLabel; 
-    QLabel* blurredImageLabel;
-    QLineEdit* sigmaInput;
-    QPushButton* filterButton;
-    QScrollArea* scrollArea;
-    QAction* aboutAction;
+    QImage applyGaussianBlur(int& sigma);
 
-    cv::Mat blurredImage;
-    cv::Mat originalImage;
+    QAction* aboutAction;
+    QImage blurredImage;
+    QImage originalImage;
 };

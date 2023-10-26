@@ -1,34 +1,11 @@
 #include "qtsmth.h"
-#include <qmessagebox.h>
-#include<qfiledialog.h>
-#include <opencv2/opencv.hpp>
-#include<qlabel.h>
-#include<QVBoxLayout>
-#include <QPushButton>
-#include <QLineEdit>
-#include <QProgressDialog>
-
 
 QtSmth::QtSmth(QWidget *parent)
     : QMainWindow(parent)
 {
     ui.setupUi(this);
 
-    originalImageLabel = new QLabel(this);
-    ui.imageTab->setLayout(new QVBoxLayout);
-    ui.imageTab->layout()->addWidget(originalImageLabel);
-
-    blurredImageLabel = new QLabel(this);
-    sigmaInput = new QLineEdit(this);
-    filterButton = new QPushButton("Apply Filter", this);
-
-    QVBoxLayout* filterTabLayout = new QVBoxLayout(ui.filterTab);
-
-    filterTabLayout->addWidget(sigmaInput);
-    filterTabLayout->addWidget(filterButton);
-    filterTabLayout->addWidget(blurredImageLabel);
-
-    connect(filterButton, &QPushButton::clicked, this, &QtSmth::applyFilter);
+    connect(ui.filterButton, &QPushButton::clicked, this, &QtSmth::applyFilter);
 
     aboutAction = new QAction("About", this);
     ui.menuBar->addAction(aboutAction);
@@ -58,85 +35,105 @@ std::vector<double> QtSmth::calculateGaussianKernel(int& sigma, int& kernelSize,
     return kernel;
 }
 
-cv::Mat QtSmth::applyGaussianBlur(int& sigma) {
 
-    int width = originalImage.cols;
-    int height = originalImage.rows;
+QImage QtSmth::applyGaussianBlur(int& sigma) {
 
+    int width = originalImage.width();
+    int height = originalImage.height();
+    
     int kernelSize = 2 * sigma + 1;
     int kernelHalf = (kernelSize - 1) / 2;
 
     std::vector<double> gaussianKernel = calculateGaussianKernel(sigma, kernelSize, kernelHalf);
 
-    cv::Mat blurredImage(height, width, CV_8UC3);
+    QImage blurredQImage(width, height, QImage::Format_RGB888);
 
+    //Horisontal
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             double sumR = 0.0, sumG = 0.0, sumB = 0.0;
             for (int i = 0; i < kernelSize; i++) {
                 int xPos = x + (i - kernelHalf);
-               
-                if (xPos < 0 || xPos >= originalImage.cols) 
+
+                if (xPos < 0 || xPos >= width)
                     xPos = x;
 
-                sumR += originalImage.at<cv::Vec3b>(y, xPos)[2] * gaussianKernel[i];
-                sumG += originalImage.at<cv::Vec3b>(y, xPos)[1] * gaussianKernel[i];
-                sumB += originalImage.at<cv::Vec3b>(y, xPos)[0] * gaussianKernel[i];
-                
+                QRgb pixel = originalImage.pixel(xPos, y);
+                sumR += qRed(pixel) * gaussianKernel[i];
+                sumG += qGreen(pixel) * gaussianKernel[i];
+                sumB += qBlue(pixel) * gaussianKernel[i];
             }
-            blurredImage.at<cv::Vec3b>(y, x) = cv::Vec3b(sumB, sumG, sumR);
+            blurredQImage.setPixel(x, y, qRgb(sumR, sumG,sumB));
         }
     }
-    return blurredImage;
+
+    //Vertical
+    for (int x = 0; x < width; x++) {
+        for (int y = 0; y < height; y++) {
+            double sumR = 0.0, sumG = 0.0, sumB = 0.0;
+            for (int i = 0; i < kernelSize; i++) {
+                int yPos = y + (i - kernelHalf);
+
+                if (yPos < 0 || yPos >= height)
+                    yPos = y;
+
+                QRgb pixel = blurredQImage.pixel(x, yPos);
+                sumR += qRed(pixel) * gaussianKernel[i];
+                sumG += qGreen(pixel) * gaussianKernel[i];
+                sumB += qBlue(pixel) * gaussianKernel[i];
+            }
+            blurredQImage.setPixel(x, y, qRgb(sumR, sumG, sumB));
+        }
+    }
+
+    return blurredQImage;
 }
 
 void QtSmth::applyFilter() {
-    int sigma = sigmaInput->text().toInt();
+    int sigma = ui.sigmaInput->text().toInt();
 
-    if (sigma <= 0 || sigma > 20) {
+    if (sigma <= 0 || sigma > 20 || sigma == NULL) {
         QMessageBox::warning(this, "Warning", "Invalid sigma value");
         return;
     }
     
     blurredImage = applyGaussianBlur(sigma);
-    displayImage(blurredImage, blurredImageLabel);
+    displayImage(blurredImage, ui.blurredImageLabel);
 
 }
 
- void QtSmth::displayImage(const cv::Mat& image, QLabel* label) {
 
-     QImage qtImage(image.data, image.cols, image.rows, image.step, QImage::Format_BGR888);
-     QPixmap pixmap = QPixmap::fromImage(qtImage);
+void QtSmth::displayImage(const QImage image, QLabel* label) {
+
+     QPixmap pixmap = QPixmap::fromImage(image);
      label->setPixmap(pixmap);
-     label->setScaledContents(false);
-     label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
  }
+
 
 void QtSmth::on_actionOpen_triggered() {
 
     QString filePath = QFileDialog::getOpenFileName(this, "Open Image", "", "Images (*.png *.jpg *.bmp)");
+
     if (!filePath.isEmpty()) {
-
-        originalImage = cv::imread(filePath.toStdString());
-
-        displayImage(originalImage, originalImageLabel);
-        
+        originalImage.load(filePath);
+        displayImage(originalImage, ui.originalImageLabel);
     }
-
 }
+
 
 void QtSmth::on_actionSave_triggered() {
 
-    if (blurredImage.empty()) {
+    if (blurredImage.isNull()) {
         QMessageBox::warning(this, "Warning", "There is no image to save");
         return;
     }
 
     QString filePath = QFileDialog::getSaveFileName(this, "Save Image", "", "Images (*.png *.jpg *.bmp)");
     if (!filePath.isEmpty()) {
-        cv::imwrite(filePath.toStdString(), blurredImage);
+        blurredImage.save(filePath);
     }
 };
+
 
 void QtSmth::on_actionExit_triggered() {
     qApp->quit();
@@ -151,6 +148,3 @@ void QtSmth::showAbout() {
 
     QMessageBox::about(this, "About", aboutText);
 };
-
-
-
